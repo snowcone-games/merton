@@ -130,10 +130,10 @@ static const char *CORE_EXTS[CORE_SYSTEM_MAX] = {
 };
 
 static const CoreButton NES_KEYBOARD_MAP[MTY_KEY_MAX] = {
-	[MTY_KEY_SEMICOLON] = CORE_BUTTON_A,
-	[MTY_KEY_L]         = CORE_BUTTON_B,
-	[MTY_KEY_O]         = CORE_BUTTON_X,
-	[MTY_KEY_P]         = CORE_BUTTON_Y,
+	[MTY_KEY_SEMICOLON] = CORE_BUTTON_B,
+	[MTY_KEY_L]         = CORE_BUTTON_A,
+	[MTY_KEY_O]         = CORE_BUTTON_Y,
+	[MTY_KEY_P]         = CORE_BUTTON_X,
 	[MTY_KEY_Q]         = CORE_BUTTON_L,
 	[MTY_KEY_LBRACKET]  = CORE_BUTTON_R,
 	[MTY_KEY_LSHIFT]    = CORE_BUTTON_SELECT,
@@ -1408,7 +1408,9 @@ static void main_event_func(const MTY_Event *evt, void *opaque)
 
 	if (toggle_menu) {
 		main_core_controller(ctx->core, 0, NULL);
-		main_ui_show(ctx->app, ctx->window, !ctx->ui_visible);
+		ctx->ui_visible = !ctx->ui_visible;
+
+		main_ui_show(ctx->app, ctx->window, ctx->ui_visible);
 	}
 }
 
