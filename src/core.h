@@ -157,9 +157,6 @@ FP(CoreLoadGame)(Core *ctx, CoreSystem system, const char *path, const void *sav
 EXPORT void
 FP(CoreUnloadGame)(Core *ctx);
 
-EXPORT bool
-FP(CoreGameIsLoaded)(Core *ctx);
-
 
 // Video information for frontend presentation
 

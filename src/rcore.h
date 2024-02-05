@@ -15,7 +15,6 @@ void *rcore_get_state(Core *ctx, size_t *size);
 bool rcore_set_state(Core *ctx, const void *state, size_t size);
 bool rcore_insert_disc(Core *ctx, const char *path);
 void *rcore_get_save_data(Core *ctx, size_t *size);
-bool rcore_game_is_loaded(Core *ctx);
 double rcore_get_frame_rate(Core *ctx);
 float rcore_get_aspect_ratio(Core *ctx);
 void rcore_set_log_func(Core *ctx, CoreLogFunc func, void *opaque);

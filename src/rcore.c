@@ -810,11 +810,6 @@ void *rcore_get_save_data(Core *ctx, size_t *size)
 	return copy;
 }
 
-bool rcore_game_is_loaded(Core *ctx)
-{
-	return ctx ? ctx->game_loaded : false;
-}
-
 void rcore_set_log_func(Core *ctx, CoreLogFunc func, void *opaque)
 {
 	CORE_LOG = func;

@@ -102,6 +102,7 @@ struct main {
 	bool ui_visible;
 	bool ui_debounce;
 	bool running;
+	bool loaded;
 	bool paused;
 	bool audio_init;
 	bool resampler_init;
@@ -191,6 +192,10 @@ static struct config main_parse_config(const MTY_JSON *jcfg, MTY_JSON **core_opt
 	#define CFG_GET_STR(name, size, def) \
 		if (!MTY_JSONObjGetString(jcfg, #name, cfg.name, size)) snprintf(cfg.name, size, "%s", def);
 
+	#define CFG_GET_CORE(name, system, def) \
+		if (!MTY_JSONObjGetString(jcfg, #name, cfg.core[system], CONFIG_CORE_MAX)) \
+			snprintf(cfg.core[system], CONFIG_CORE_MAX, "%s", def)
+
 	CFG_GET_BOOL(bg_pause, false);
 	CFG_GET_BOOL(menu_pause, false);
 	CFG_GET_BOOL(console, false);
@@ -213,16 +218,16 @@ static struct config main_parse_config(const MTY_JSON *jcfg, MTY_JSON **core_opt
 
 	CFG_GET_BOOL(fullscreen, cfg.window.type & MTY_WINDOW_FULLSCREEN);
 
-	CFG_GET_STR(core[CORE_SYSTEM_ATARI2600], CONFIG_CORE_MAX, "stella");
-	CFG_GET_STR(core[CORE_SYSTEM_NES], CONFIG_CORE_MAX, "mesen2");
-	CFG_GET_STR(core[CORE_SYSTEM_SMS], CONFIG_CORE_MAX, "mesen2");
-	CFG_GET_STR(core[CORE_SYSTEM_TG16], CONFIG_CORE_MAX, "mesen2");
-	CFG_GET_STR(core[CORE_SYSTEM_GENESIS], CONFIG_CORE_MAX, "genesis-plus-gx");
-	CFG_GET_STR(core[CORE_SYSTEM_GAMEBOY], CONFIG_CORE_MAX, "mesen2");
-	CFG_GET_STR(core[CORE_SYSTEM_SNES], CONFIG_CORE_MAX, "mesen2");
-	CFG_GET_STR(core[CORE_SYSTEM_PS], CONFIG_CORE_MAX, "duckstation");
-	CFG_GET_STR(core[CORE_SYSTEM_N64], CONFIG_CORE_MAX, "mupen64plus");
-	CFG_GET_STR(core[CORE_SYSTEM_GBA], CONFIG_CORE_MAX, "mgba");
+	CFG_GET_CORE(core.atari2600, CORE_SYSTEM_ATARI2600, "stella");
+	CFG_GET_CORE(core.nes, CORE_SYSTEM_NES, "mesen2");
+	CFG_GET_CORE(core.ms, CORE_SYSTEM_SMS, "mesen2");
+	CFG_GET_CORE(core.tg16, CORE_SYSTEM_TG16, "mesen2");
+	CFG_GET_CORE(core.genesis, CORE_SYSTEM_GENESIS, "genesis-plus-gx");
+	CFG_GET_CORE(core.gameboy, CORE_SYSTEM_GAMEBOY, "mesen2");
+	CFG_GET_CORE(core.snes, CORE_SYSTEM_SNES, "mesen2");
+	CFG_GET_CORE(core.ps, CORE_SYSTEM_PS, "duckstation");
+	CFG_GET_CORE(core.n64, CORE_SYSTEM_N64, "mupen64plus");
+	CFG_GET_CORE(core.gba, CORE_SYSTEM_GBA, "mgba");
 
 	const MTY_JSON *obj = MTY_JSONObjGetItem(jcfg, "core_options");
 	*core_options = obj ? MTY_JSONDuplicate(obj) : MTY_JSONObjCreate();
@@ -508,6 +513,8 @@ static void main_save_sdata(Core *core, const char *content_name)
 static void main_unload(struct main *ctx)
 {
 	main_save_sdata(ctx->core, ctx->content_name);
+	ctx->loaded = false;
+
 	CoreUnload(&ctx->core);
 	loader_reset();
 
@@ -559,10 +566,10 @@ static void main_load_game(struct main *ctx, const char *name, bool fetch_core)
 
 		size_t sdata_size = 0;
 		void *sdata = main_read_sdata(ctx->core, content_name, &sdata_size);
-		bool success = CoreLoadGame(ctx->core, system, name, sdata, sdata_size);
+		ctx->loaded = CoreLoadGame(ctx->core, system, name, sdata, sdata_size);
 		MTY_Free(sdata);
 
-		if (!success)
+		if (!ctx->loaded)
 			return;
 
 		ctx->system = system;
@@ -793,7 +800,7 @@ static void main_post_ui_state(struct main *ctx)
 	MTY_JSON *nstate = MTY_JSONObjCreate();
 	MTY_JSONObjSetItem(msg, "nstate", nstate);
 	MTY_JSONObjSetBool(nstate, "pause", ctx->paused);
-	MTY_JSONObjSetBool(nstate, "running", CoreGameIsLoaded(ctx->core));
+	MTY_JSONObjSetBool(nstate, "running", ctx->loaded);
 	MTY_JSONObjSetNumber(nstate, "save-state", ctx->last_save_index);
 	MTY_JSONObjSetNumber(nstate, "load-state", ctx->last_load_index);
 	MTY_JSONObjSetBool(nstate, "has_discs", ctx->cdrom);
@@ -1087,7 +1094,7 @@ static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 				CoreSetSetting(ctx->core, evt->opt.key, evt->opt.val);
 				break;
 			case APP_EVENT_SAVE_STATE: {
-				if (!ctx->content_name || !CoreGameIsLoaded(ctx->core))
+				if (!ctx->content_name || !ctx->loaded)
 					break;
 
 				size_t size = 0;
@@ -1109,7 +1116,7 @@ static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 				break;
 			}
 			case APP_EVENT_LOAD_STATE: {
-				if (!ctx->content_name || !CoreGameIsLoaded(ctx->core))
+				if (!ctx->content_name || !ctx->loaded)
 					break;
 
 				const char *name = MTY_SprintfDL("%s.state%u", ctx->content_name, evt->state_index);
@@ -1283,16 +1290,14 @@ static void *main_render_thread(void *opaque)
 		}
 
 		// Run video
-		bool loaded = CoreGameIsLoaded(ctx->core);
-
 		bool active = !ctx->paused &&
 			((!ctx->cfg.bg_pause || MTY_WindowIsActive(ctx->app, ctx->window)) &&
 			(!ctx->cfg.menu_pause || !ctx->ui_visible));
 
-		if (active && loaded) {
+		if (active && ctx->loaded) {
 			CoreRun(ctx->core);
 
-		} else if (loaded) {
+		} else if (ctx->loaded) {
 			main_video(NULL, CORE_COLOR_FORMAT_UNKNOWN, 0, 0, 0, ctx);
 
 		} else {
