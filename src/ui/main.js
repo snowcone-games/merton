@@ -733,19 +733,17 @@ function coreOptsToMenu(core_opts) {
 	mrow.items.push({name: 'core-reset', type: 'action', etype: 'label', label: 'Reset Core Settings'});
 	mrow.items.push({etype: 'separator'});
 
-	const keys = Object.keys(core_opts);
+	for (let x = 0; x < core_opts.length; x++) {
+		const s = core_opts[x];
+		console.log(s);
 
-	for (let x = 0; x < keys.length; x++) {
-		const key = keys[x];
-		const val = core_opts[key];
+		let mitem = {name: s.key, type: 'core_opts', etype: s.type, label: s.desc};
 
-		let mitem = {name: key, type: 'core_opts', etype: val.type, label: val.name};
-
-		if (val.type == 'dropdown') {
+		if (s.type == 'dropdown') {
 			mitem.opts = [];
 
-			for (let y = 0; y < val.list.length; y++) {
-				const opt = val.list[y];
+			for (let y = 0; y < s.list.length; y++) {
+				const opt = s.list[y];
 				mitem.opts.push({label: opt, value: opt});
 			}
 		}

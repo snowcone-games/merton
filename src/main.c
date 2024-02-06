@@ -23,13 +23,23 @@
 #define MAIN_WINDOW_W 800
 #define MAIN_WINDOW_H 600
 
+#define TLOCAL_STRING_SIZE 1024
+
+#if defined(_MSC_VER)
+	#define TLOCAL __declspec(thread)
+#else
+	#define TLOCAL __thread
+#endif
+
 #if defined(MTN_DEBUG)
 	#define MTN_DEBUG_WEBVIEW true
 #else
 	#define MTN_DEBUG_WEBVIEW false
 #endif
 
-#if !defined(_WIN32)
+static TLOCAL char TLOCAL_STRING[TLOCAL_STRING_SIZE];
+
+#if !defined(_MSC_VER)
 static int32_t fopen_s(FILE **f, const char *name, const char *mode)
 {
 	*f = fopen(name, mode);
@@ -88,6 +98,7 @@ struct main {
 	char *content_name;
 	char *cmsg;
 	CoreSystem system;
+	CoreSetting *defs;
 	MTY_App *app;
 	MTY_JSON *jcfg;
 	MTY_JSON *core_options;
@@ -474,16 +485,47 @@ static CoreSystem main_get_system(struct main *ctx, const char *name)
 	return CORE_SYSTEM_UNKNOWN;
 }
 
-static void main_set_core_options(struct main *ctx)
+static const char *main_settings_key(const char *key, const char *core_name)
 {
-	uint64_t iter = 0;
+	snprintf(TLOCAL_STRING, TLOCAL_STRING_SIZE, "%s-%s", core_name, key);
 
-	for (const char *key = NULL; MTY_JSONObjGetNextKey(ctx->core_options, &iter, &key);) {
-		char val[CORE_OPT_NAME_MAX];
+	return TLOCAL_STRING;
+}
 
-		if (MTY_JSONObjGetString(ctx->core_options, key, val, CORE_OPT_NAME_MAX))
-			CoreSetSetting(ctx->core, key, val);
+static CoreSetting *main_find_setting(const char *core_name, const char *skey)
+{
+	uint32_t len = 0;
+	CoreSetting *settings = CoreGetSettings(&len);
+
+	for (uint32_t x = 0; x < len; x++) {
+		CoreSetting *s = &settings[x];
+
+		const char *key = main_settings_key(s->key, core_name);
+
+		if (!strcmp(key, skey))
+			return s;
 	}
+
+	return NULL;
+}
+
+static CoreSetting *main_set_core_options(struct main *ctx, const char *core_name)
+{
+	uint32_t len = 0;
+	CoreSetting *settings = CoreGetSettings(&len);
+
+	// Store defaults
+	size_t size = len * sizeof(CoreSetting);
+	CoreSetting *defs = MTY_Alloc(len, sizeof(CoreSetting));
+	memcpy(defs, settings, size);
+
+	for (uint32_t x = 0; x < len; x++) {
+		CoreSetting *s = &settings[x];
+		MTY_JSONObjGetString(ctx->core_options, main_settings_key(s->key, core_name),
+			s->value, CORE_OPT_NAME_MAX);
+	}
+
+	return defs;
 }
 
 static void *main_read_sdata(Core *core, const char *content_name, size_t *size)
@@ -524,9 +566,12 @@ static void main_unload(struct main *ctx)
 
 	MTY_Free(ctx->game_path);
 	MTY_Free(ctx->content_name);
+	MTY_Free(ctx->defs);
+
 	ctx->system = CORE_SYSTEM_UNKNOWN;
 	ctx->game_path = NULL;
 	ctx->content_name = NULL;
+	ctx->defs = NULL;
 	ctx->cdrom = false;
 
 	ctx->resampler_init = false;
@@ -558,7 +603,7 @@ static void main_load_game(struct main *ctx, const char *name, bool fetch_core)
 		if (!ctx->core)
 			return;
 
-		main_set_core_options(ctx);
+		ctx->defs = main_set_core_options(ctx, core);
 
 		CoreSetLogFunc(ctx->core, main_log, &ctx);
 		CoreSetAudioFunc(ctx->core, main_audio, ctx->a_q);
@@ -761,37 +806,33 @@ static void main_post_ui_state(struct main *ctx)
 	MTY_JSONObjSetItem(msg, "cfg", cfg);
 
 	// Core options
-	MTY_JSON *core_opts = MTY_JSONObjCreate();
+	uint32_t len = 0;
+	CoreSetting *settings = CoreGetSettings(&len);
+
+	MTY_JSON *core_opts = MTY_JSONArrayCreate(len);
 	MTY_JSONObjSetItem(msg, "core_opts", core_opts);
 
-	uint32_t vlen = 0;
-	const CoreSetting *vars = CoreGetAllSettings(ctx->core, &vlen);
+	for (uint32_t x = 0; x < len; x++) {
+		CoreSetting *s = &settings[x];
 
-	for (uint32_t x = 0; x < vlen; x++) {
-		CoreSystem system = vars[x].system;
-		CoreSettingType type = vars[x].type;
-		const char *desc = vars[x].desc;
-		const char *key = vars[x].key;
-
-		if (system != CORE_SYSTEM_UNKNOWN && system != ctx->system)
+		if (s->system != CORE_SYSTEM_UNKNOWN && s->system != ctx->system)
 			continue;
 
-		const char *cur = CoreGetSetting(ctx->core, key);
-		if (!cur)
-			continue;
+		const char *key = main_settings_key(s->key, ctx->cfg.core[ctx->system]);
 
 		MTY_JSON *opt_item = MTY_JSONObjCreate();
-		MTY_JSONObjSetString(cfg, key, cur);
-		MTY_JSONObjSetItem(core_opts, key, opt_item);
-		MTY_JSONObjSetString(opt_item, "name", desc);
+		MTY_JSONObjSetString(cfg, key, s->value);
+		MTY_JSONArraySetItem(core_opts, x, opt_item);
+		MTY_JSONObjSetString(opt_item, "desc", s->desc);
+		MTY_JSONObjSetString(opt_item, "key", key);
 		MTY_JSONObjSetString(opt_item, "type",
-			type == CORE_SETTING_BOOL ? "checkbox" : "dropdown");
+			s->type == CORE_SETTING_BOOL ? "checkbox" : "dropdown");
 
-		MTY_JSON *opt_list = MTY_JSONArrayCreate(vars[x].nopts);
+		MTY_JSON *opt_list = MTY_JSONArrayCreate(settings[x].nopts);
 		MTY_JSONObjSetItem(opt_item, "list", opt_list);
 
-		for (uint32_t y = 0; y < vars[x].nopts; y++) {
-			const char *item = vars[x].opts[y];
+		for (uint32_t y = 0; y < s->nopts; y++) {
+			const char *item = s->opts[y];
 			MTY_JSONArraySetString(opt_list, y, item);
 		}
 	}
@@ -1083,16 +1124,29 @@ static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 			case APP_EVENT_CLEAR_OPTS: {
 				MTY_JSONDestroy(&ctx->core_options);
 				ctx->core_options = MTY_JSONObjCreate();
-				CoreResetSettings(ctx->core);
+
+				uint32_t len = 0;
+				CoreSetting *settings = CoreGetSettings(&len);
+
+				if (ctx->defs)
+					memcpy(settings, ctx->defs, len * sizeof(CoreSetting));
+
+				CoreUpdateSettings(ctx->core);
 
 				struct app_event sevt = {.type = APP_EVENT_STATE};
 				main_push_app_event(&sevt, ctx);
 				break;
 			}
-			case APP_EVENT_CORE_OPT:
+			case APP_EVENT_CORE_OPT: {
 				MTY_JSONObjSetString(ctx->core_options, evt->opt.key, evt->opt.val);
-				CoreSetSetting(ctx->core, evt->opt.key, evt->opt.val);
+
+				CoreSetting *s = main_find_setting(ctx->cfg.core[ctx->system], evt->opt.key);
+				if (s)
+					snprintf(s->value, CORE_OPT_NAME_MAX, "%s", evt->opt.val);
+
+				CoreUpdateSettings(ctx->core);
 				break;
+			}
 			case APP_EVENT_SAVE_STATE: {
 				if (!ctx->content_name || !ctx->loaded)
 					break;

@@ -26,13 +26,11 @@
 extern "C" {
 #endif
 
-
 #define CORE_PLAYERS_MAX   8
 #define CORE_DESC_MAX      128
 #define CORE_OPTS_MAX      32
 #define CORE_KEY_NAME_MAX  64
 #define CORE_OPT_NAME_MAX  64
-
 #define CORE_FRAMES_MAX    0x3000
 #define CORE_SAMPLES_MAX   (CORE_FRAMES_MAX * 2)
 
@@ -109,6 +107,7 @@ typedef struct {
 	char desc[CORE_DESC_MAX];
 	char key[CORE_KEY_NAME_MAX];
 	char opts[CORE_OPTS_MAX][CORE_OPT_NAME_MAX];
+	char value[CORE_OPT_NAME_MAX];
 	uint32_t nopts;
 } CoreSetting;
 
@@ -211,17 +210,11 @@ FP(CoreInsertDisc)(Core *ctx, const char *path);
 
 // Settings
 
-EXPORT const CoreSetting *
-FP(CoreGetAllSettings)(Core *ctx, uint32_t *len);
-
-EXPORT const char *
-FP(CoreGetSetting)(Core *ctx, const char *key);
+EXPORT CoreSetting *
+FP(CoreGetSettings)(uint32_t *len);
 
 EXPORT void
-FP(CoreSetSetting)(Core *ctx, const char *key, const char *val);
-
-EXPORT void
-FP(CoreResetSettings)(Core *ctx);
+FP(CoreUpdateSettings)(Core *ctx);
 
 #ifdef __cplusplus
 }

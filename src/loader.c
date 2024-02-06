@@ -29,10 +29,8 @@ static void loader_set_rcore(void)
 	LOADER_SET_RCORE(CoreSetLogFunc, rcore_set_log_func);
 	LOADER_SET_RCORE(CoreSetAudioFunc, rcore_set_audio_func);
 	LOADER_SET_RCORE(CoreSetVideoFunc, rcore_set_video_func);
-	LOADER_SET_RCORE(CoreGetAllSettings, rcore_get_all_settings);
-	LOADER_SET_RCORE(CoreSetSetting, rcore_set_setting);
-	LOADER_SET_RCORE(CoreGetSetting, rcore_get_setting);
-	LOADER_SET_RCORE(CoreResetSettings, rcore_reset_settings);
+	LOADER_SET_RCORE(CoreGetSettings, rcore_get_settings);
+	LOADER_SET_RCORE(CoreUpdateSettings, rcore_update_settings);
 }
 
 Core *loader_load(const char *name, const char *system_dir)
@@ -74,10 +72,8 @@ Core *loader_load(const char *name, const char *system_dir)
 	LOADER_LOAD_SYM(CoreSetLogFunc);
 	LOADER_LOAD_SYM(CoreSetAudioFunc);
 	LOADER_LOAD_SYM(CoreSetVideoFunc);
-	LOADER_LOAD_SYM(CoreGetAllSettings);
-	LOADER_LOAD_SYM(CoreSetSetting);
-	LOADER_LOAD_SYM(CoreGetSetting);
-	LOADER_LOAD_SYM(CoreResetSettings);
+	LOADER_LOAD_SYM(CoreGetSettings);
+	LOADER_LOAD_SYM(CoreUpdateSettings);
 
 	return CoreLoad(system_dir);
 }

@@ -57,7 +57,6 @@ static unsigned RETRO_REGION;
 
 static uint32_t CORE_NUM_VARIABLES;
 static CoreSetting CORE_VARIABLES[CORE_VARIABLES_MAX];
-static MTY_Hash *CORE_OPTS;
 static bool CORE_OPT_SET;
 
 static CoreLogFunc CORE_LOG;
@@ -152,9 +151,24 @@ static retro_proc_address_t rcore_retro_hw_get_proc_address(const char *sym)
 	return NULL;
 }
 
+static const char *rcore_setting_default(const char *key)
+{
+	// Hardware rendering is not set up, make sure to use
+	// available software renderers
+
+	if (!strcmp(key, "mupen64plus-rdp-plugin"))
+		return "angrylion";
+
+	if (!strcmp(key, "mupen64plus-rsp-plugin"))
+		return "cxd4";
+
+	return NULL;
+}
+
 static void rcore_parse_setting(CoreSetting *var, const char *key, const char *val)
 {
 	snprintf(var->key, CORE_KEY_NAME_MAX, "%s", key);
+	const char *def = rcore_setting_default(key);
 
 	char *dup = MTY_Strdup(val);
 
@@ -171,26 +185,15 @@ static void rcore_parse_setting(CoreSetting *var, const char *key, const char *v
 		char *tok = MTY_Strtok(semi, "|", &ptr);
 
 		while (tok && var->nopts < CORE_OPTS_MAX) {
+			if (var->nopts == 0)
+				snprintf(var->value, CORE_KEY_NAME_MAX, "%s", def ? def : tok);
+
 			snprintf(var->opts[var->nopts++], CORE_OPT_NAME_MAX, "%s", tok);
 			tok = MTY_Strtok(NULL, "|", &ptr);
 		}
 	}
 
 	MTY_Free(dup);
-}
-
-static const char *rcore_setting_default(const char *key)
-{
-	// Hardware rendering is not set up, make sure to use
-	// available software renderers
-
-	if (!strcmp(key, "mupen64plus-rdp-plugin"))
-		return "angrylion";
-
-	if (!strcmp(key, "mupen64plus-rsp-plugin"))
-		return "cxd4";
-
-	return NULL;
 }
 
 static bool rcore_retro_environment(unsigned cmd, void *data)
@@ -243,7 +246,16 @@ static bool rcore_retro_environment(unsigned cmd, void *data)
 		}
 		case RETRO_ENVIRONMENT_GET_VARIABLE: {
 			struct retro_variable *arg = data;
-			arg->value = MTY_HashGet(CORE_OPTS, arg->key);
+			arg->value = NULL;
+
+			for (uint32_t x = 0; x < CORE_NUM_VARIABLES; x++) {
+				CoreSetting *s = &CORE_VARIABLES[x];
+
+				if (!strcmp(arg->key, s->key)) {
+					arg->value = s->value;
+					break;
+				}
+			}
 
 			return arg->value ? true : false;
 		}
@@ -269,17 +281,6 @@ static bool rcore_retro_environment(unsigned cmd, void *data)
 
 				if (CORE_NUM_VARIABLES < CORE_VARIABLES_MAX) {
 					rcore_parse_setting(&CORE_VARIABLES[CORE_NUM_VARIABLES], v->key, v->value);
-
-					if (!MTY_HashGet(CORE_OPTS, v->key)) {
-						const char *default_val = rcore_setting_default(v->key);
-
-						if (!default_val)
-							default_val = CORE_VARIABLES[CORE_NUM_VARIABLES].opts[0];
-
-						if (default_val[0])
-							MTY_HashSet(CORE_OPTS, v->key, MTY_Strdup(default_val));
-					}
-
 					CORE_NUM_VARIABLES++;
 				}
 			}
@@ -563,8 +564,6 @@ Core *rcore_load(MTY_SO *so, const char *system_dir)
 	snprintf(CORE_SAVE_DIR, MTY_PATH_MAX, "%s", system_dir);
 	snprintf(CORE_SYSTEM_DIR, MTY_PATH_MAX, "%s", system_dir);
 
-	CORE_OPTS = MTY_HashCreate(0);
-
 	r = rcore_load_symbols(so, ctx);
 	if (!r)
 		goto except;
@@ -617,7 +616,6 @@ void rcore_unload(Core **core)
 	CORE_NUM_VARIABLES = 0;
 	memset(CORE_VARIABLES, 0, sizeof(CoreSetting) * CORE_VARIABLES_MAX);
 
-	MTY_HashDestroy(&CORE_OPTS, MTY_Free);
 	CORE_OPT_SET = false;
 
 	CORE_LOG = NULL;
@@ -834,38 +832,14 @@ void rcore_set_video_func(Core *ctx, CoreVideoFunc func, void *opaque)
 	CORE_VIDEO_OPAQUE = opaque;
 }
 
-const CoreSetting *rcore_get_all_settings(Core *ctx, uint32_t *len)
+CoreSetting *rcore_get_settings(uint32_t *len)
 {
 	*len = CORE_NUM_VARIABLES;
 
 	return CORE_VARIABLES;
 }
 
-void rcore_set_setting(Core *ctx, const char *key, const char *val)
+void rcore_update_settings(Core *ctx)
 {
-	if (!ctx)
-		return;
-
-	MTY_Free(MTY_HashSet(CORE_OPTS, key, MTY_Strdup(val)));
-
-	CORE_OPT_SET = true;
-}
-
-const char *rcore_get_setting(Core *ctx, const char *key)
-{
-	if (!ctx)
-		return NULL;
-
-	return MTY_HashGet(CORE_OPTS, key);
-}
-
-void rcore_reset_settings(Core *ctx)
-{
-	MTY_HashDestroy(&CORE_OPTS, MTY_Free);
-	CORE_OPTS = MTY_HashCreate(0);
-
-	for (uint32_t x = 0; x < CORE_NUM_VARIABLES; x++)
-		MTY_HashSet(CORE_OPTS, CORE_VARIABLES[x].key, MTY_Strdup(CORE_VARIABLES[x].opts[0]));
-
 	CORE_OPT_SET = true;
 }
