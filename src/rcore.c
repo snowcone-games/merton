@@ -11,7 +11,6 @@
 #define CORE_AUDIO_BATCH   128
 
 struct Core {
-	bool game_loaded;
 	char *game_data;
 	size_t game_data_size;
 
@@ -523,6 +522,13 @@ static int16_t rcore_retro_input_state(unsigned port, unsigned device,
 
 // Core API
 
+static MTY_SO *SO;
+
+void rcore_set_so(MTY_SO *so)
+{
+	SO = so;
+}
+
 static bool rcore_load_symbols(MTY_SO *so, Core *ctx)
 {
 	#define CORE_LOAD_SYM(sym) \
@@ -555,50 +561,15 @@ static bool rcore_load_symbols(MTY_SO *so, Core *ctx)
 	return true;
 }
 
-Core *rcore_load(MTY_SO *so, const char *system_dir)
-{
-	Core *ctx = MTY_Alloc(1, sizeof(Core));
-
-	bool r = true;
-
-	snprintf(CORE_SAVE_DIR, MTY_PATH_MAX, "%s", system_dir);
-	snprintf(CORE_SYSTEM_DIR, MTY_PATH_MAX, "%s", system_dir);
-
-	r = rcore_load_symbols(so, ctx);
-	if (!r)
-		goto except;
-
-	r = ctx->retro_api_version() == RETRO_API_VERSION;
-	if (!r)
-		goto except;
-
-	ctx->retro_set_environment(rcore_retro_environment);
-	ctx->retro_init();
-
-	ctx->retro_set_video_refresh(rcore_retro_video_refresh);
-	ctx->retro_set_audio_sample(rcore_retro_audio_sample);
-	ctx->retro_set_audio_sample_batch(rcore_retro_audio_sample_batch);
-	ctx->retro_set_input_poll(rcore_retro_input_poll);
-	ctx->retro_set_input_state(rcore_retro_input_state);
-
-	ctx->retro_get_system_info(&ctx->system_info);
-
-	except:
-
-	if (!r)
-		rcore_unload(&ctx);
-
-	return ctx;
-}
-
-void rcore_unload(Core **core)
+void rcore_unload_game(Core **core)
 {
 	if (!core || !*core)
 		return;
 
 	Core *ctx = *core;
 
-	rcore_unload_game(ctx);
+	if (ctx->retro_unload_game)
+		ctx->retro_unload_game();
 
 	if (ctx->retro_deinit)
 		ctx->retro_deinit();
@@ -633,13 +604,34 @@ void rcore_unload(Core **core)
 	*core = NULL;
 }
 
-bool rcore_load_game(Core *ctx, CoreSystem system, const char *path,
+Core *rcore_load_game(CoreSystem system, const char *system_dir, const char *path,
 	const void *save_data, size_t save_data_size)
 {
-	if (!ctx)
-		return false;
+	Core *ctx = MTY_Alloc(1, sizeof(Core));
 
-	rcore_unload_game(ctx);
+	bool r = true;
+
+	snprintf(CORE_SAVE_DIR, MTY_PATH_MAX, "%s", system_dir);
+	snprintf(CORE_SYSTEM_DIR, MTY_PATH_MAX, "%s", system_dir);
+
+	r = rcore_load_symbols(SO, ctx);
+	if (!r)
+		goto except;
+
+	r = ctx->retro_api_version() == RETRO_API_VERSION;
+	if (!r)
+		goto except;
+
+	ctx->retro_set_environment(rcore_retro_environment);
+	ctx->retro_init();
+
+	ctx->retro_set_video_refresh(rcore_retro_video_refresh);
+	ctx->retro_set_audio_sample(rcore_retro_audio_sample);
+	ctx->retro_set_audio_sample_batch(rcore_retro_audio_sample_batch);
+	ctx->retro_set_input_poll(rcore_retro_input_poll);
+	ctx->retro_set_input_state(rcore_retro_input_state);
+
+	ctx->retro_get_system_info(&ctx->system_info);
 
 	MTY_Free(ctx->game_data);
 	ctx->game_data = NULL;
@@ -651,51 +643,49 @@ bool rcore_load_game(Core *ctx, CoreSystem system, const char *path,
 
 	if (!ctx->system_info.need_fullpath) {
 		ctx->game_data = MTY_ReadFile(path, &ctx->game_data_size);
-		if (!ctx->game_data)
-			return false;
+		if (!ctx->game_data) {
+			r = false;
+			goto except;
+		}
 
 		game.data = ctx->game_data;
 		game.size = ctx->game_data_size;
 	}
 
-	ctx->game_loaded = ctx->retro_load_game(&game);
+	r = ctx->retro_load_game(&game);
+	if (!r)
+		goto except;
 
-	if (ctx->game_loaded) {
-		ctx->retro_set_controller_port_device(0, RETRO_CONTROLLER_DEVICE);
+	ctx->retro_set_controller_port_device(0, RETRO_CONTROLLER_DEVICE);
 
-		struct retro_system_av_info av_info = {0};
-		ctx->retro_get_system_av_info(&av_info);
-		RETRO_SYSTEM_TIMING = av_info.timing;
-		RETRO_GAME_GEOMETRY = av_info.geometry;
+	struct retro_system_av_info av_info = {0};
+	ctx->retro_get_system_av_info(&av_info);
+	RETRO_SYSTEM_TIMING = av_info.timing;
+	RETRO_GAME_GEOMETRY = av_info.geometry;
 
-		RETRO_REGION = ctx->retro_get_region();
+	RETRO_REGION = ctx->retro_get_region();
 
-		// Load SRAM
-		size_t sram_size = ctx->retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+	// Load SRAM
+	size_t sram_size = ctx->retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
 
-		if (sram_size > 0 && sram_size >= save_data_size) {
-			void *sram = ctx->retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+	if (sram_size > 0 && sram_size >= save_data_size) {
+		void *sram = ctx->retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
-			if (sram)
-				memcpy(sram, save_data, save_data_size);
-		}
+		if (sram)
+			memcpy(sram, save_data, save_data_size);
 	}
 
-	return ctx->game_loaded;
-}
+	except:
 
-void rcore_unload_game(Core *ctx)
-{
-	if (!ctx || !ctx->game_loaded)
-		return;
+	if (!r)
+		rcore_unload_game(&ctx);
 
-	ctx->retro_unload_game();
-	ctx->game_loaded = false;
+	return ctx;
 }
 
 void rcore_reset(Core *ctx)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return;
 
 	ctx->retro_reset();
@@ -703,7 +693,7 @@ void rcore_reset(Core *ctx)
 
 void rcore_run(Core *ctx)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return;
 
 	ctx->retro_run();
@@ -714,7 +704,7 @@ void rcore_run(Core *ctx)
 
 double rcore_get_frame_rate(Core *ctx)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return 60.0;
 
 	return RETRO_SYSTEM_TIMING.fps;
@@ -722,7 +712,7 @@ double rcore_get_frame_rate(Core *ctx)
 
 float rcore_get_aspect_ratio(Core *ctx)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return 1.0f;
 
 	float ar = RETRO_GAME_GEOMETRY.aspect_ratio;
@@ -752,7 +742,7 @@ void rcore_set_axis(Core *ctx, uint8_t player, CoreAxis axis, int16_t value)
 
 void *rcore_get_state(Core *ctx, size_t *size)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return NULL;
 
 	*size = ctx->retro_serialize_size();
@@ -770,7 +760,7 @@ void *rcore_get_state(Core *ctx, size_t *size)
 
 bool rcore_set_state(Core *ctx, const void *state, size_t size)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return false;
 
 	return ctx->retro_unserialize(state, size);
@@ -778,7 +768,7 @@ bool rcore_set_state(Core *ctx, const void *state, size_t size)
 
 bool rcore_insert_disc(Core *ctx, const char *path)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return false;
 
 	if (RETRO_DISK_CONTROL_CALLBACK.set_eject_state)
@@ -791,7 +781,7 @@ bool rcore_insert_disc(Core *ctx, const char *path)
 
 void *rcore_get_save_data(Core *ctx, size_t *size)
 {
-	if (!ctx || !ctx->game_loaded)
+	if (!ctx)
 		return NULL;
 
 	*size = ctx->retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);

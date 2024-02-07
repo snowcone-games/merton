@@ -113,7 +113,6 @@ struct main {
 	bool ui_visible;
 	bool ui_debounce;
 	bool running;
-	bool loaded;
 	bool paused;
 	bool audio_init;
 	bool resampler_init;
@@ -528,7 +527,7 @@ static CoreSetting *main_set_core_options(struct main *ctx, const char *core_nam
 	return defs;
 }
 
-static void *main_read_sdata(Core *core, const char *content_name, size_t *size)
+static void *main_read_sdata(const char *content_name, size_t *size)
 {
 	const char *name = MTY_SprintfDL("%s.srm", content_name);
 
@@ -555,9 +554,8 @@ static void main_save_sdata(Core *core, const char *content_name)
 static void main_unload(struct main *ctx)
 {
 	main_save_sdata(ctx->core, ctx->content_name);
-	ctx->loaded = false;
 
-	CoreUnload(&ctx->core);
+	CoreUnloadGame(&ctx->core);
 	loader_reset();
 
 	uint16_t tmp[8][8] = {0};
@@ -599,23 +597,24 @@ static void main_load_game(struct main *ctx, const char *name, bool fetch_core)
 
 	// If core is on the system and the most recent hash matches, try to use it
 	if (file_ok) {
-		ctx->core = loader_load(core_path, config_system_dir());
-		if (!ctx->core)
+		if (!loader_load(core_path))
 			return;
+
+		CoreSetLogFunc(NULL, main_log, &ctx);
 
 		ctx->defs = main_set_core_options(ctx, core);
 
-		CoreSetLogFunc(ctx->core, main_log, &ctx);
-		CoreSetAudioFunc(ctx->core, main_audio, ctx->a_q);
-		CoreSetVideoFunc(ctx->core, main_video, ctx);
-
 		size_t sdata_size = 0;
-		void *sdata = main_read_sdata(ctx->core, content_name, &sdata_size);
-		ctx->loaded = CoreLoadGame(ctx->core, system, name, sdata, sdata_size);
+		void *sdata = main_read_sdata(content_name, &sdata_size);
+
+		ctx->core = CoreLoadGame(system, config_system_dir(), name, sdata, sdata_size);
 		MTY_Free(sdata);
 
-		if (!ctx->loaded)
+		if (!ctx->core)
 			return;
+
+		CoreSetAudioFunc(ctx->core, main_audio, ctx->a_q);
+		CoreSetVideoFunc(ctx->core, main_video, ctx);
 
 		ctx->system = system;
 		ctx->game_path = MTY_Strdup(name);
@@ -841,7 +840,7 @@ static void main_post_ui_state(struct main *ctx)
 	MTY_JSON *nstate = MTY_JSONObjCreate();
 	MTY_JSONObjSetItem(msg, "nstate", nstate);
 	MTY_JSONObjSetBool(nstate, "pause", ctx->paused);
-	MTY_JSONObjSetBool(nstate, "running", ctx->loaded);
+	MTY_JSONObjSetBool(nstate, "running", ctx->core);
 	MTY_JSONObjSetNumber(nstate, "save-state", ctx->last_save_index);
 	MTY_JSONObjSetNumber(nstate, "load-state", ctx->last_load_index);
 	MTY_JSONObjSetBool(nstate, "has_discs", ctx->cdrom);
@@ -1148,7 +1147,7 @@ static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 				break;
 			}
 			case APP_EVENT_SAVE_STATE: {
-				if (!ctx->content_name || !ctx->loaded)
+				if (!ctx->content_name || !ctx->core)
 					break;
 
 				size_t size = 0;
@@ -1170,7 +1169,7 @@ static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 				break;
 			}
 			case APP_EVENT_LOAD_STATE: {
-				if (!ctx->content_name || !ctx->loaded)
+				if (!ctx->content_name || !ctx->core)
 					break;
 
 				const char *name = MTY_SprintfDL("%s.state%u", ctx->content_name, evt->state_index);
@@ -1348,10 +1347,10 @@ static void *main_render_thread(void *opaque)
 			((!ctx->cfg.bg_pause || MTY_WindowIsActive(ctx->app, ctx->window)) &&
 			(!ctx->cfg.menu_pause || !ctx->ui_visible));
 
-		if (active && ctx->loaded) {
+		if (active && ctx->core) {
 			CoreRun(ctx->core);
 
-		} else if (ctx->loaded) {
+		} else if (ctx->core) {
 			main_video(NULL, CORE_COLOR_FORMAT_UNKNOWN, 0, 0, 0, ctx);
 
 		} else {

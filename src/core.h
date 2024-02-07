@@ -124,16 +124,6 @@ typedef void (*CoreVideoFunc)(const void *buf, CoreColorFormat format, uint32_t 
 	uint32_t height, size_t pitch, void *opaque);
 
 
-// Core initialization
-// 'systemDir' is where to look for BIOS files
-
-EXPORT Core *
-FP(CoreLoad)(const char *systemDir);
-
-EXPORT void
-FP(CoreUnload)(Core **core);
-
-
 // Output callbacks
 
 EXPORT void
@@ -147,14 +137,15 @@ FP(CoreSetVideoFunc)(Core *ctx, CoreVideoFunc func, void *opaque);
 
 
 // Game loading
+// 'systemDir' is where to look for BIOS files
 // 'saveData' is written upfront rather than written to after the game is loaded
 
-EXPORT bool
-FP(CoreLoadGame)(Core *ctx, CoreSystem system, const char *path, const void *saveData,
-	size_t saveDataSize);
+EXPORT Core *
+FP(CoreLoadGame)(CoreSystem system, const char *systemDir, const char *path,
+	const void *saveData, size_t saveDataSize);
 
 EXPORT void
-FP(CoreUnloadGame)(Core *ctx);
+FP(CoreUnloadGame)(Core **core);
 
 
 // Video information for frontend presentation

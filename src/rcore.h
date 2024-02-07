@@ -2,11 +2,10 @@
 
 #include "matoya.h"
 
-Core *rcore_load(MTY_SO *so, const char *system_dir);
-void rcore_unload(Core **core);
-bool rcore_load_game(Core *ctx, CoreSystem system, const char *path,
+void rcore_set_so(MTY_SO *so);
+Core *rcore_load_game(CoreSystem system, const char *system_dir, const char *path,
 	const void *save_data, size_t save_data_size);
-void rcore_unload_game(Core *ctx);
+void rcore_unload_game(Core **core);
 void rcore_reset(Core *ctx);
 void rcore_run(Core *ctx);
 void rcore_set_button(Core *ctx, uint8_t player, CoreButton button, bool pressed);
