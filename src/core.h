@@ -127,13 +127,13 @@ typedef void (*CoreVideoFunc)(const void *buf, CoreColorFormat format, uint32_t 
 // Output callbacks
 
 EXPORT void
-FP(CoreSetLogFunc)(Core *ctx, CoreLogFunc func, void *opaque);
+FP(CoreSetLogFunc)(CoreLogFunc func, void *opaque);
 
 EXPORT void
-FP(CoreSetAudioFunc)(Core *ctx, CoreAudioFunc func, void *opaque);
+FP(CoreSetAudioFunc)(CoreAudioFunc func, void *opaque);
 
 EXPORT void
-FP(CoreSetVideoFunc)(Core *ctx, CoreVideoFunc func, void *opaque);
+FP(CoreSetVideoFunc)(CoreVideoFunc func, void *opaque);
 
 
 // Game loading

@@ -123,7 +123,7 @@ static void rcore_retro_log_printf(enum retro_log_level level, const char *fmt, 
 
 	va_end(args);
 
-	if (CORE_LOG && level != RETRO_LOG_DEBUG)
+	if (level != RETRO_LOG_DEBUG)
 		CORE_LOG(msg, CORE_LOG_OPAQUE);
 
 	MTY_Free(msg);
@@ -215,8 +215,7 @@ static bool rcore_retro_environment(unsigned cmd, void *data)
 		case RETRO_ENVIRONMENT_SET_MESSAGE: {
 			const struct retro_message *arg = data;
 
-			if (CORE_LOG)
-				CORE_LOG(arg->msg, CORE_LOG_OPAQUE);
+			CORE_LOG(arg->msg, CORE_LOG_OPAQUE);
 
 			return true;
 		}
@@ -456,13 +455,12 @@ static CoreColorFormat rcore_color_format(void)
 static void rcore_retro_video_refresh(const void *data, unsigned width,
 	unsigned height, size_t pitch)
 {
-	if (CORE_VIDEO)
-		CORE_VIDEO(data, rcore_color_format(), width, height, pitch, CORE_VIDEO_OPAQUE);
+	CORE_VIDEO(data, rcore_color_format(), width, height, pitch, CORE_VIDEO_OPAQUE);
 }
 
 static void rcore_output_audio(size_t batch)
 {
-	if (CORE_AUDIO && CORE_NUM_FRAMES > batch) {
+	if (CORE_NUM_FRAMES > batch) {
 		CORE_AUDIO(CORE_FRAMES, CORE_NUM_FRAMES, lrint(RETRO_SYSTEM_TIMING.sample_rate), CORE_AUDIO_OPAQUE);
 		CORE_NUM_FRAMES = 0;
 	}
@@ -798,26 +796,20 @@ void *rcore_get_save_data(Core *ctx, size_t *size)
 	return copy;
 }
 
-void rcore_set_log_func(Core *ctx, CoreLogFunc func, void *opaque)
+void rcore_set_log_func(CoreLogFunc func, void *opaque)
 {
 	CORE_LOG = func;
 	CORE_LOG_OPAQUE = opaque;
 }
 
-void rcore_set_audio_func(Core *ctx, CoreAudioFunc func, void *opaque)
+void rcore_set_audio_func(CoreAudioFunc func, void *opaque)
 {
-	if (!ctx)
-		return;
-
 	CORE_AUDIO = func;
 	CORE_AUDIO_OPAQUE = opaque;
 }
 
-void rcore_set_video_func(Core *ctx, CoreVideoFunc func, void *opaque)
+void rcore_set_video_func(CoreVideoFunc func, void *opaque)
 {
-	if (!ctx)
-		return;
-
 	CORE_VIDEO = func;
 	CORE_VIDEO_OPAQUE = opaque;
 }

@@ -551,6 +551,12 @@ static void main_save_sdata(Core *core, const char *content_name)
 	}
 }
 
+static void main_render_dummy(struct main *ctx)
+{
+	uint16_t tmp[8][8] = {0};
+	main_video(tmp, CORE_COLOR_FORMAT_B5G6R5, 8, 8, 8 * 2, ctx);
+}
+
 static void main_unload(struct main *ctx)
 {
 	main_save_sdata(ctx->core, ctx->content_name);
@@ -558,8 +564,7 @@ static void main_unload(struct main *ctx)
 	CoreUnloadGame(&ctx->core);
 	loader_reset();
 
-	uint16_t tmp[8][8] = {0};
-	main_video(tmp, CORE_COLOR_FORMAT_B5G6R5, 8, 8, 8 * 2, ctx);
+	main_render_dummy(ctx);
 	MTY_WindowPresent(ctx->app, ctx->window);
 
 	MTY_Free(ctx->game_path);
@@ -600,7 +605,9 @@ static void main_load_game(struct main *ctx, const char *name, bool fetch_core)
 		if (!loader_load(core_path))
 			return;
 
-		CoreSetLogFunc(NULL, main_log, &ctx);
+		CoreSetLogFunc(main_log, NULL);
+		CoreSetAudioFunc(main_audio, ctx->a_q);
+		CoreSetVideoFunc(main_video, ctx);
 
 		ctx->defs = main_set_core_options(ctx, core);
 
@@ -612,9 +619,6 @@ static void main_load_game(struct main *ctx, const char *name, bool fetch_core)
 
 		if (!ctx->core)
 			return;
-
-		CoreSetAudioFunc(ctx->core, main_audio, ctx->a_q);
-		CoreSetVideoFunc(ctx->core, main_video, ctx);
 
 		ctx->system = system;
 		ctx->game_path = MTY_Strdup(name);
@@ -1328,6 +1332,7 @@ static void *main_render_thread(void *opaque)
 	struct main *ctx = opaque;
 
 	main_refresh_gfx(ctx, ctx->cfg.gfx, ctx->cfg.vsync);
+	main_render_dummy(ctx);
 
 	MTY_Time stamp = MTY_GetTime();
 
@@ -1350,11 +1355,8 @@ static void *main_render_thread(void *opaque)
 		if (active && ctx->core) {
 			CoreRun(ctx->core);
 
-		} else if (ctx->core) {
-			main_video(NULL, CORE_COLOR_FORMAT_UNKNOWN, 0, 0, 0, ctx);
-
 		} else {
-			MTY_WindowClear(ctx->app, ctx->window, 0, 0, 0, 1);
+			main_video(NULL, CORE_COLOR_FORMAT_UNKNOWN, 0, 0, 0, ctx);
 		}
 
 		// Frame timing when vsync is off
