@@ -84,6 +84,7 @@ typedef enum {
 	CORE_SYSTEM_PS        = 8,  // PlayStation
 	CORE_SYSTEM_N64       = 9,  // Nintendo 64
 	CORE_SYSTEM_GBA       = 10,
+	CORE_SYSTEM_SS        = 11, // Sega Saturn
 	CORE_SYSTEM_MAX,
 } CoreSystem;
 

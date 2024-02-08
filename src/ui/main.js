@@ -33,6 +33,10 @@ const SYSTEMS = {
 		name: 'SNES',
 		cores: ['mesen2', 'snes9x_libretro', 'bsnes_libretro', 'mesen-s_libretro']
 	},
+	ss: {
+		name: 'Saturn',
+		cores: ['mednafen_saturn_libretro'],
+	},
 	ps: {
 		name: 'PlayStation',
 		cores: ['duckstation', 'swanstation_libretro']

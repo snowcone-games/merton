@@ -40,6 +40,7 @@ cores = [
 	'bsnes_libretro',
 	'mesen-s_libretro',
 	'snes9x_libretro',
+	'mednafen_saturn_libretro',
 	'mednafen_pce_libretro',
 ]
 

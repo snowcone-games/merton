@@ -235,6 +235,7 @@ static struct config main_parse_config(const MTY_JSON *jcfg, MTY_JSON **core_opt
 	CFG_GET_CORE(core.genesis, CORE_SYSTEM_GENESIS, "genesis-plus-gx");
 	CFG_GET_CORE(core.gameboy, CORE_SYSTEM_GAMEBOY, "mesen2");
 	CFG_GET_CORE(core.snes, CORE_SYSTEM_SNES, "mesen2");
+	CFG_GET_CORE(core.ss, CORE_SYSTEM_SS, "mednafen_saturn_libretro");
 	CFG_GET_CORE(core.ps, CORE_SYSTEM_PS, "duckstation");
 	CFG_GET_CORE(core.n64, CORE_SYSTEM_N64, "mupen64plus");
 	CFG_GET_CORE(core.gba, CORE_SYSTEM_GBA, "mgba");
@@ -290,6 +291,7 @@ static MTY_JSON *main_serialize_config(struct config *cfg, const MTY_JSON *core_
 	CFG_SET_CORE(core.genesis, CORE_SYSTEM_GENESIS);
 	CFG_SET_CORE(core.gameboy, CORE_SYSTEM_GAMEBOY);
 	CFG_SET_CORE(core.snes, CORE_SYSTEM_SNES);
+	CFG_SET_CORE(core.ss, CORE_SYSTEM_SS);
 	CFG_SET_CORE(core.ps, CORE_SYSTEM_PS);
 	CFG_SET_CORE(core.n64, CORE_SYSTEM_N64);
 	CFG_SET_CORE(core.gba, CORE_SYSTEM_GBA);
@@ -448,9 +450,13 @@ static CoreSystem main_get_cdrom_system(struct main *ctx, const char *name)
 
 			// SEGADISCSYSTEM is close to the beginning
 			buf[1024] = 0;
-
 			if (strstr(buf, "SEGADISCSYSTEM"))
 				sys = CORE_SYSTEM_GENESIS;
+
+			// SEGASATURN is close to the beginning
+			buf[256] = 0;
+			if (strstr(buf, "SEGASATURN"))
+				sys = CORE_SYSTEM_SS;
 		}
 
 		fclose(f);
