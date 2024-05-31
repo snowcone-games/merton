@@ -47,7 +47,7 @@ const SYSTEMS = {
 	},
 	gba: {
 		name: 'Game Boy Advance',
-		cores: ['mgba', 'mgba_libretro']
+		cores: ['mgba', 'mesen2', 'mgba_libretro']
 	},
 };
 
