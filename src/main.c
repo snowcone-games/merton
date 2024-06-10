@@ -977,7 +977,7 @@ static void main_handle_ui_event(struct main *ctx, const char *text)
 				snprintf(basedir, MTY_PATH_MAX, "%s", MTY_GetProcessDir());
 
 			const char *rdir = MTY_ResolvePath(dir[0] ? MTY_JoinPath(basedir, dir) : basedir);
-			if (!rdir)
+			if (!rdir || !MTY_FileExists(rdir))
 				rdir = MTY_GetProcessDir();
 
 			main_post_ui_files(ctx->app, ctx->window, jbuf, rdir);
