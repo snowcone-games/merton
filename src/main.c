@@ -154,25 +154,6 @@ static const CoreButton NES_KEYBOARD_MAP[MTY_KEY_MAX] = {
 	[MTY_KEY_D]         = CORE_BUTTON_DPAD_R,
 };
 
-static const MTY_CButton BUTTON_MAP[CORE_BUTTON_MAX] = {
-	 [CORE_BUTTON_X]      = MTY_CBUTTON_X,
-	 [CORE_BUTTON_A]      = MTY_CBUTTON_A,
-	 [CORE_BUTTON_B]      = MTY_CBUTTON_B,
-	 [CORE_BUTTON_Y]      = MTY_CBUTTON_Y,
-	 [CORE_BUTTON_L]      = MTY_CBUTTON_LEFT_SHOULDER,
-	 [CORE_BUTTON_R]      = MTY_CBUTTON_RIGHT_SHOULDER,
-	 [CORE_BUTTON_L2]     = MTY_CBUTTON_LEFT_TRIGGER,
-	 [CORE_BUTTON_R2]     = MTY_CBUTTON_RIGHT_TRIGGER,
-	 [CORE_BUTTON_SELECT] = MTY_CBUTTON_BACK,
-	 [CORE_BUTTON_START]  = MTY_CBUTTON_START,
-	 [CORE_BUTTON_L3]     = MTY_CBUTTON_LEFT_THUMB,
-	 [CORE_BUTTON_R3]     = MTY_CBUTTON_RIGHT_THUMB,
-	 [CORE_BUTTON_DPAD_U] = MTY_CBUTTON_DPAD_UP,
-	 [CORE_BUTTON_DPAD_R] = MTY_CBUTTON_DPAD_RIGHT,
-	 [CORE_BUTTON_DPAD_D] = MTY_CBUTTON_DPAD_DOWN,
-	 [CORE_BUTTON_DPAD_L] = MTY_CBUTTON_DPAD_LEFT,
-};
-
 static const MTY_CAxis AXIS_MAP[CORE_AXIS_MAX] = {
 	[CORE_AXIS_LX] = MTY_CAXIS_THUMB_LX,
 	[CORE_AXIS_LY] = MTY_CAXIS_THUMB_LY,
@@ -398,7 +379,7 @@ static void main_audio(const int16_t *buf, size_t frames, uint32_t sample_rate, 
 
 	MTY_Queue *q = opaque;
 
-	struct audio_packet *pkt = MTY_QueueGetInputBuffer(q);
+	struct audio_packet *pkt = MTY_QueueGetInputBuffer(q, sizeof(struct audio_packet));
 
 	if (pkt) {
 		pkt->sample_rate = sample_rate;
@@ -406,7 +387,7 @@ static void main_audio(const int16_t *buf, size_t frames, uint32_t sample_rate, 
 
 		memcpy(pkt->data, buf, frames * 4);
 
-		MTY_QueuePush(q, sizeof(struct audio_packet));
+		MTY_QueuePush(q);
 	}
 }
 
@@ -770,14 +751,14 @@ static void main_post_ui_controller(struct main *ctx, MTY_App *app, MTY_Window w
 	MTY_JSONObjSetString(msg, "type", "controller");
 	MTY_JSONObjSetBool(msg, "b", c->buttons[MTY_CBUTTON_B]);
 	MTY_JSONObjSetBool(msg, "a", c->buttons[MTY_CBUTTON_A]);
-	MTY_JSONObjSetBool(msg, "u", c->buttons[MTY_CBUTTON_DPAD_UP] ||
-		c->axes[MTY_CAXIS_THUMB_LY].value > athresh);
-	MTY_JSONObjSetBool(msg, "d", c->buttons[MTY_CBUTTON_DPAD_DOWN] ||
-		c->axes[MTY_CAXIS_THUMB_LY].value < -athresh);
-	MTY_JSONObjSetBool(msg, "l", c->buttons[MTY_CBUTTON_DPAD_LEFT] ||
-		c->axes[MTY_CAXIS_THUMB_LX].value < -athresh);
-	MTY_JSONObjSetBool(msg, "r", c->buttons[MTY_CBUTTON_DPAD_RIGHT] ||
-		c->axes[MTY_CAXIS_THUMB_LX].value > athresh);
+	MTY_JSONObjSetBool(msg, "u", c->dpad[MTY_DPAD_UP] ||
+		c->axes[MTY_CAXIS_THUMB_LY] > athresh);
+	MTY_JSONObjSetBool(msg, "d", c->dpad[MTY_DPAD_DOWN] ||
+		c->axes[MTY_CAXIS_THUMB_LY] < -athresh);
+	MTY_JSONObjSetBool(msg, "l", c->dpad[MTY_DPAD_LEFT] ||
+		c->axes[MTY_CAXIS_THUMB_LX] < -athresh);
+	MTY_JSONObjSetBool(msg, "r", c->dpad[MTY_DPAD_RIGHT] ||
+		c->axes[MTY_CAXIS_THUMB_LX] > athresh);
 	MTY_JSONObjSetBool(msg, "ls", c->buttons[MTY_CBUTTON_LEFT_SHOULDER]);
 	MTY_JSONObjSetBool(msg, "rs", c->buttons[MTY_CBUTTON_RIGHT_SHOULDER]);
 
@@ -1046,10 +1027,10 @@ static void main_push_app_event(const struct app_event *evt, void *opaque)
 
 	MTY_Queue *q = evt->rt ? ctx->rt_q : ctx->mt_q;
 
-	struct app_event *qbuf = MTY_QueueGetInputBuffer(q);
+	struct app_event *qbuf = MTY_QueueGetInputBuffer(q, sizeof(struct app_event));
 	if (qbuf) {
 		*qbuf = *evt;
-		MTY_QueuePush(q, sizeof(struct app_event));
+		MTY_QueuePush(q);
 	}
 }
 
@@ -1394,11 +1375,26 @@ static void main_core_controller(Core *core, uint8_t player, const MTY_Controlle
 	if (!c)
 		c = &dummy;
 
-	for (CoreButton x = 1; x < CORE_BUTTON_MAX; x++)
-		CoreSetButton(core, player, x, c->buttons[BUTTON_MAP[x]]);
+	CoreSetButton(core, player, CORE_BUTTON_DPAD_U, c->dpad[MTY_DPAD_UP]);
+	CoreSetButton(core, player, CORE_BUTTON_DPAD_R, c->dpad[MTY_DPAD_RIGHT]);
+	CoreSetButton(core, player, CORE_BUTTON_DPAD_D, c->dpad[MTY_DPAD_DOWN]);
+	CoreSetButton(core, player, CORE_BUTTON_DPAD_L, c->dpad[MTY_DPAD_LEFT]);
+
+	CoreSetButton(core, player, CORE_BUTTON_X, c->buttons[MTY_CBUTTON_X]);
+	CoreSetButton(core, player, CORE_BUTTON_A, c->buttons[MTY_CBUTTON_A]);
+	CoreSetButton(core, player, CORE_BUTTON_B, c->buttons[MTY_CBUTTON_B]);
+	CoreSetButton(core, player, CORE_BUTTON_Y, c->buttons[MTY_CBUTTON_Y]);
+	CoreSetButton(core, player, CORE_BUTTON_L, c->buttons[MTY_CBUTTON_LEFT_SHOULDER]);
+	CoreSetButton(core, player, CORE_BUTTON_R, c->buttons[MTY_CBUTTON_RIGHT_SHOULDER]);
+	CoreSetButton(core, player, CORE_BUTTON_L2, c->buttons[MTY_CBUTTON_LEFT_TRIGGER]);
+	CoreSetButton(core, player, CORE_BUTTON_R2, c->buttons[MTY_CBUTTON_RIGHT_TRIGGER]);
+	CoreSetButton(core, player, CORE_BUTTON_SELECT, c->buttons[MTY_CBUTTON_BACK]);
+	CoreSetButton(core, player, CORE_BUTTON_START, c->buttons[MTY_CBUTTON_START]);
+	CoreSetButton(core, player, CORE_BUTTON_L3, c->buttons[MTY_CBUTTON_LEFT_THUMB]);
+	CoreSetButton(core, player, CORE_BUTTON_R3, c->buttons[MTY_CBUTTON_RIGHT_THUMB]);
 
 	for (CoreAxis x = 1; x < CORE_AXIS_MAX; x++)
-		CoreSetAxis(core, player, x, c->axes[AXIS_MAP[x]].value);
+		CoreSetAxis(core, player, x, c->axes[AXIS_MAP[x]]);
 }
 
 static void main_event_func(const MTY_Event *evt, void *opaque)
@@ -1448,7 +1444,7 @@ static void main_event_func(const MTY_Event *evt, void *opaque)
 				main_post_ui_controller(ctx, ctx->app, ctx->window, c);
 			}
 
-			bool pressed = c->axes[MTY_CAXIS_TRIGGER_R].value > 200;
+			bool pressed = c->axes[MTY_CAXIS_TRIGGER_R] > 200;
 
 			toggle_menu = pressed && ctx->ui_debounce != pressed;
 			ctx->ui_debounce = pressed;
@@ -1514,9 +1510,9 @@ int32_t main(int32_t argc, char **argv)
 	MTY_SetTimerResolution(1);
 	MTY_SetLogFunc(main_mty_log_callback, NULL);
 
-	ctx.rt_q = MTY_QueueCreate(50, sizeof(struct app_event));
-	ctx.mt_q = MTY_QueueCreate(50, sizeof(struct app_event));
-	ctx.a_q = MTY_QueueCreate(15, sizeof(struct audio_packet));
+	ctx.rt_q = MTY_QueueCreate(50);
+	ctx.mt_q = MTY_QueueCreate(50);
+	ctx.a_q = MTY_QueueCreate(15);
 
 	if (argc >= 2) {
 		struct app_event evt = {.type = APP_EVENT_LOAD_GAME, .rt = true};

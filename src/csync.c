@@ -98,13 +98,13 @@ static void csync_fetch_core_cmd(struct csync *ctx, struct csync_cmd *cmd)
 
 void csync_fetch_core(struct csync *ctx, const char *file)
 {
-	struct csync_cmd *cmd = MTY_QueueGetInputBuffer(ctx->q);
+	struct csync_cmd *cmd = MTY_QueueGetInputBuffer(ctx->q, sizeof(struct csync_cmd));
 
 	if (cmd) {
 		cmd->type = CSYNC_CMD_FETCH_CORE;
 		snprintf(cmd->fetch_core.file, MTY_PATH_MAX, "%s", file);
 
-		MTY_QueuePush(ctx->q, sizeof(struct csync_cmd));
+		MTY_QueuePush(ctx->q);
 	}
 }
 
@@ -183,11 +183,11 @@ bool csync_check_core_hash(struct csync *ctx, const char *core, const char *file
 
 static void csync_simple_command(MTY_Queue *q, enum csync_cmd_type type)
 {
-	struct csync_cmd *cmd = MTY_QueueGetInputBuffer(q);
+	struct csync_cmd *cmd = MTY_QueueGetInputBuffer(q, sizeof(struct csync_cmd));
 
 	if (cmd) {
 		cmd->type = type;
-		MTY_QueuePush(q, sizeof(struct csync_cmd));
+		MTY_QueuePush(q);
 	}
 }
 
@@ -224,7 +224,7 @@ struct csync *csync_start(void)
 {
 	struct csync *ctx = MTY_Alloc(1, sizeof(struct csync));
 
-	ctx->q = MTY_QueueCreate(20, sizeof(struct csync_cmd));
+	ctx->q = MTY_QueueCreate(20);
 	ctx->m = MTY_MutexCreate();
 
 	ctx->thread = MTY_ThreadCreate(csync_thread, ctx);
