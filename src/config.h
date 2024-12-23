@@ -33,7 +33,6 @@ struct config {
 	uint32_t sharpen;
 	int32_t vsync;
 
-	MTY_GFX gfx;
 	MTY_Filter filter;
 	MTY_Frame window;
 
