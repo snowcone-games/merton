@@ -99,6 +99,7 @@ LIBS = \
 	-framework AppKit \
 	-framework QuartzCore \
 	-framework Carbon \
+	-framework GameController \
 	-framework Metal \
 	-framework IOKit \
 	-framework AudioToolbox \
