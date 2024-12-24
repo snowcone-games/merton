@@ -1031,6 +1031,15 @@ static void main_push_app_event(const struct app_event *evt, void *opaque)
 	}
 }
 
+static void main_update_interval(struct main *ctx, int32_t vsync)
+{
+	// Auto setting
+	if (vsync < 0)
+		vsync = lrint((MTY_WindowGetRefreshRate(ctx->app, ctx->window) / 60.0) * 100.0);
+
+	MTY_WindowSetSyncInterval(ctx->app, ctx->window, vsync);
+}
+
 static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 {
 	for (struct app_event *evt = NULL; MTY_QueueGetOutputBuffer(q, 0, (void **) &evt, NULL);) {
@@ -1072,7 +1081,7 @@ static void main_poll_app_events(struct main *ctx, MTY_Queue *q)
 				ctx->running = false;
 				break;
 			case APP_EVENT_GFX:
-				// TODO Change vsync, sync interval
+				main_update_interval(ctx, evt->vsync);
 				break;
 			case APP_EVENT_PAUSE:
 				ctx->paused = !ctx->paused;
@@ -1305,13 +1314,7 @@ static void *main_render_thread(void *opaque)
 
 	MTY_WindowLoadGFX(ctx->app, ctx->window, ctx->cfg.vsync != 0);
 
-	// Auto setting
-	int32_t vsync = ctx->cfg.vsync;
-	if (vsync < 0)
-		vsync = lrint((MTY_WindowGetRefreshRate(ctx->app, ctx->window) / 60.0) * 100.0);
-
-	MTY_WindowSetSyncInterval(ctx->app, ctx->window, vsync);
-
+	main_update_interval(ctx, ctx->cfg.vsync);
 	main_render_dummy(ctx);
 
 	MTY_Time stamp = MTY_GetTime();
@@ -1351,9 +1354,9 @@ static void *main_render_thread(void *opaque)
 		MTY_WindowPresent(ctx->app, ctx->window);
 	}
 
-	MTY_WindowUnloadGFX(ctx->app, ctx->window);
-
 	main_unload(ctx);
+
+	MTY_WindowUnloadGFX(ctx->app, ctx->window);
 
 	return NULL;
 }
