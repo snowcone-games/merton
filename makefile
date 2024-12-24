@@ -53,7 +53,6 @@ LIBS = \
 	comdlg32.lib \
 	shell32.lib \
 	d3d11.lib \
-	d3d12.lib \
 	dxgi.lib \
 	dxguid.lib \
 	ole32.lib \
@@ -65,13 +64,11 @@ LIBS = \
 	shlwapi.lib \
 	advapi32.lib \
 	ws2_32.lib \
-	xinput.lib \
 	gdi32.lib \
 	imm32.lib \
 	winhttp.lib \
 	crypt32.lib \
-	cabinet.lib \
-	hid.lib
+	cabinet.lib
 
 !IFDEF DEBUG
 FLAGS = $(FLAGS) /Ob0 /Zi /Oy-
