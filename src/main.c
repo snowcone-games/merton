@@ -1312,8 +1312,6 @@ static void *main_render_thread(void *opaque)
 {
 	struct main *ctx = opaque;
 
-	MTY_WindowLoadGFX(ctx->app, ctx->window, ctx->cfg.vsync != 0);
-
 	main_update_interval(ctx, ctx->cfg.vsync);
 	main_render_dummy(ctx);
 
@@ -1355,8 +1353,6 @@ static void *main_render_thread(void *opaque)
 	}
 
 	main_unload(ctx);
-
-	MTY_WindowUnloadGFX(ctx->app, ctx->window);
 
 	return NULL;
 }
